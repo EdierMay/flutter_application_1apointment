@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
+import 'appointment_page.dart'; // para agendar con parámetros
+import 'doctor_agenda_page.dart'; // para ver la agenda del médico
 
 class SpecialistDoctorsPage extends StatelessWidget {
   final String especialidad;
 
   const SpecialistDoctorsPage({super.key, required this.especialidad});
+
+  // Pequeña utilidad para generar IDs tipo slug
+  String _slugify(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .trim();
+  }
 
   // Simulación de médicos por especialidad
   List<Map<String, String>> getDoctors(String especialidad) {
@@ -57,7 +69,11 @@ class SpecialistDoctorsPage extends StatelessWidget {
       ],
     };
 
-    return data[especialidad] ?? [];
+    final list = data[especialidad] ?? [];
+    // agrega un id slug por cada médico
+    return list
+        .map((m) => {...m, "id": _slugify(m["nombre"] ?? "medico")})
+        .toList();
   }
 
   @override
@@ -86,6 +102,44 @@ class SpecialistDoctorsPage extends StatelessWidget {
                     ),
                     title: Text(doctor['nombre']!),
                     subtitle: Text(doctor['descripcion']!),
+                    // 👇 Trailing combinado: botón para ver agenda + flecha
+                    trailing: Wrap(
+                      spacing: 8,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.event_note),
+                          tooltip: 'Ver agenda',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DoctorAgendaPage(
+                                  especialidad: especialidad,
+                                  doctorId:
+                                      doctor['id']!, // el slug que generamos
+                                  doctorNombre: doctor['nombre']!,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const Icon(Icons.arrow_forward_ios, size: 16),
+                      ],
+                    ),
+                    // 👇 onTap intacto: sigue abriendo AppointmentPage con el doctor elegido
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AppointmentPage(
+                            especialidad: especialidad,
+                            doctorNombre: doctor['nombre']!,
+                            doctorId:
+                                doctor['id']!, // <- clave para su propia agenda
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 );
               },

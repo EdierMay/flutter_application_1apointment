@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart'; // <-- Descomenta si ya usas Firestore
 
 class AppointmentPage extends StatefulWidget {
-  const AppointmentPage({super.key});
+  final String? especialidad;
+  final String? doctorNombre;
+  final String? doctorId; // <- clave estable por médico
+
+  const AppointmentPage({
+    super.key,
+    this.especialidad,
+    this.doctorNombre,
+    this.doctorId,
+  });
 
   @override
   State<AppointmentPage> createState() => _AppointmentPageState();
@@ -41,7 +51,46 @@ class _AppointmentPageState extends State<AppointmentPage> {
     }
   }
 
-  void _saveAppointment() {
+  /// 🔎 Nueva función: valida si ya hay una cita en el mismo rango de tiempo
+  Future<bool> hasTimeConflict({
+    required String especialidad,
+    required String doctorId,
+    required DateTime fechaHoraLocal,
+    Duration ventana = const Duration(minutes: 30),
+  }) async {
+    if (especialidad.isEmpty || doctorId.isEmpty) return false;
+
+    final fechaUtc = fechaHoraLocal.toUtc();
+    final inicioUtc = fechaUtc.subtract(ventana);
+    final finUtc = fechaUtc.add(ventana);
+
+    // ------------------- FIRESTORE -------------------
+    // Descomenta el import y este bloque para activarlo
+    /*
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('especialidades')
+          .doc(especialidad)
+          .collection('doctores')
+          .doc(doctorId)
+          .collection('citas')
+          .where('fechaHora', isGreaterThanOrEqualTo: inicioUtc)
+          .where('fechaHora', isLessThanOrEqualTo: finUtc)
+          .limit(1)
+          .get();
+
+      return snap.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('hasTimeConflict error: $e');
+      return false;
+    }
+    */
+
+    // ------------------- SIN FIRESTORE -------------------
+    return false;
+  }
+
+  Future<void> _saveAppointment() async {
     if (user == null) return;
 
     if (selectedDate == null ||
@@ -53,22 +102,100 @@ class _AppointmentPageState extends State<AppointmentPage> {
       return;
     }
 
-    // Aquí normalmente guardarías en Firebase, pero lo omitimos por ahora
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Cita agendada (demo)")));
+    final dateTime = DateTime(
+      selectedDate!.year,
+      selectedDate!.month,
+      selectedDate!.day,
+      selectedTime!.hour,
+      selectedTime!.minute,
+    );
+
+    // ✅ Validación de choque de horario (descomenta para activarlo con Firestore)
+    // if (await hasTimeConflict(
+    //   especialidad: widget.especialidad ?? 'general',
+    //   doctorId: widget.doctorId ?? 'sin-id',
+    //   fechaHoraLocal: dateTime,
+    // )) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text("Este horario ya está ocupado para este médico")),
+    //   );
+    //   return;
+    // }
+
+    // ----- Guarda por doctor (cada médico con su propia agenda) -----
+    // Descomenta cuando tengas cloud_firestore configurado en tu proyecto:
+    /*
+    try {
+      await FirebaseFirestore.instance
+          .collection('especialidades')
+          .doc(widget.especialidad ?? 'general')
+          .collection('doctores')
+          .doc(widget.doctorId ?? 'sin-id')
+          .collection('citas')
+          .add({
+        'pacienteUid': user!.uid,
+        'pacienteEmail': user!.email,
+        'especialidad': widget.especialidad,
+        'doctorId': widget.doctorId,
+        'doctorNombre': widget.doctorNombre,
+        'motivo': motivoController.text.trim(),
+        'fechaHora': dateTime.toUtc(),
+        'creadoEn': FieldValue.serverTimestamp(),
+        'estado': 'pendiente',
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error al guardar: $e")),
+      );
+      return;
+    }
+    */
+
+    // DEMO (sin Firestore):
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "Cita agendada (demo) con ${widget.doctorNombre ?? 'Médico'}"
+          " el ${dateTime.day}/${dateTime.month}/${dateTime.year} ${selectedTime!.format(context)}",
+        ),
+      ),
+    );
 
     Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasDoctor = (widget.doctorNombre != null && widget.doctorId != null);
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Agendar Cita")),
+      appBar: AppBar(
+        title: const Text("Agendar Cita"),
+        backgroundColor: Colors.teal,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            if (widget.especialidad != null || hasDoctor) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (widget.especialidad != null)
+                    Chip(
+                      avatar: const Icon(Icons.local_hospital, size: 18),
+                      label: Text(widget.especialidad!),
+                    ),
+                  if (hasDoctor)
+                    Chip(
+                      avatar: const Icon(Icons.person, size: 18),
+                      label: Text(widget.doctorNombre!),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
             ListTile(
               leading: const Icon(Icons.calendar_today),
               title: Text(
@@ -100,7 +227,10 @@ class _AppointmentPageState extends State<AppointmentPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
