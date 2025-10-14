@@ -5,6 +5,7 @@ import 'messages_page.dart';
 import 'settings_page.dart';
 import 'appointment_page.dart';
 import 'tips_page.dart';
+import 'specialist_doctors_page.dart'; // <--- Import agregado
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,11 +19,12 @@ class _HomePageState extends State<HomePage> {
   final User? user = FirebaseAuth.instance.currentUser;
 
   final List<String> especialistas = [
-    "Cardiólogo",
-    "Pediatra",
-    "Dermatólogo",
-    "Neurólogo",
-    "Ginecólogo",
+    "Cardiología",
+    "Pediatría",
+    "Dermatología",
+    "Urología",
+    "Ginecología",
+    "Ortopedía",
   ];
 
   Widget _buildHomeContent() {
@@ -45,14 +47,20 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.calendar_today,
                 label: "Agendar Cita",
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AppointmentPage()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AppointmentPage()),
+                  );
                 },
               ),
               _homeOption(
                 icon: Icons.health_and_safety,
                 label: "Consejos Médicos",
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const TipsPage()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TipsPage()),
+                  );
                 },
               ),
             ],
@@ -63,6 +71,8 @@ class _HomePageState extends State<HomePage> {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
+
+          // 🔁 Bloque reemplazado por el actualizado
           Column(
             children: especialistas.map((esp) {
               return Card(
@@ -72,6 +82,15 @@ class _HomePageState extends State<HomePage> {
                   leading: const Icon(Icons.local_hospital, color: Colors.teal),
                   title: Text(esp),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            SpecialistDoctorsPage(especialidad: esp),
+                      ),
+                    );
+                  },
                 ),
               );
             }).toList(),
@@ -103,7 +122,7 @@ class _HomePageState extends State<HomePage> {
               color: Colors.grey.withOpacity(0.4),
               offset: const Offset(2, 2),
               blurRadius: 4,
-            )
+            ),
           ],
         ),
         child: Column(
@@ -146,10 +165,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Inicio"),
-        backgroundColor: Colors.teal,
-      ),
+      appBar: AppBar(title: const Text("Inicio"), backgroundColor: Colors.teal),
       body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -159,7 +175,10 @@ class _HomePageState extends State<HomePage> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
           BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Mensajes'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Configuración'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Configuración',
+          ),
         ],
       ),
     );
