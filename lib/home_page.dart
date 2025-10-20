@@ -3,9 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'profile_page.dart';
 import 'messages_page.dart';
 import 'settings_page.dart';
-import 'appointment_page.dart';
 import 'tips_page.dart';
-import 'specialist_doctors_page.dart'; // <--- Import agregado
+import 'specialist_doctors_page.dart'; // Mantén este para navegar
+import 'appointment_page.dart'; // <-- VUELVE a importarlo, lo usas abajo
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});

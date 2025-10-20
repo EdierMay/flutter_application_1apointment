@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,28 +14,39 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _login() async {
     if (_formKey.currentState!.validate()) {
       try {
-        UserCredential cred = await _auth.signInWithEmailAndPassword(
+        final cred = await _auth.signInWithEmailAndPassword(
           email: emailController.text.trim(),
           password: passwordController.text.trim(),
         );
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Bienvenido ${cred.user!.email}"),
             backgroundColor: Colors.teal,
           ),
         );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
-        );
+        // Usa ruta nombrada para no depender de home_page.dart
+        Navigator.pushReplacementNamed(context, '/home');
       } on FirebaseAuthException catch (e) {
         String msg = "Error: ${e.message}";
-        if (e.code == "user-not-found") msg = "Usuario no encontrado";
-        else if (e.code == "wrong-password") msg = "Contraseña incorrecta";
-        else if (e.code == "invalid-email") msg = "Correo inválido";
+        if (e.code == "user-not-found") {
+          msg = "Usuario no encontrado";
+        } else if (e.code == "wrong-password") {
+          msg = "Contraseña incorrecta";
+        } else if (e.code == "invalid-email") {
+          msg = "Correo inválido";
+        }
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg), backgroundColor: Colors.red),
         );
@@ -46,9 +56,10 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _signOut() async {
     await _auth.signOut();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Sesión cerrada")),
-    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Sesión cerrada")));
   }
 
   void _showPasswordResetDialog() {
@@ -70,17 +81,22 @@ class _LoginPageState extends State<LoginPage> {
                 if (email.isNotEmpty && email.contains("@")) {
                   try {
                     await _auth.sendPasswordResetEmail(email: email);
+                    if (!mounted) return;
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Correo de recuperación enviado.")),
+                      const SnackBar(
+                        content: Text("Correo de recuperación enviado."),
+                      ),
                     );
                   } on FirebaseAuthException catch (e) {
+                    if (!mounted) return;
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text("Error: ${e.message}")),
                     );
                   }
                 } else {
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Ingresa un correo válido")),
                   );
@@ -126,7 +142,11 @@ class _LoginPageState extends State<LoginPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.local_hospital, size: 72, color: Colors.teal),
+                      const Icon(
+                        Icons.local_hospital,
+                        size: 72,
+                        color: Colors.teal,
+                      ),
                       const SizedBox(height: 16),
                       const Text(
                         "Acceso a Citas Médicas",
@@ -163,7 +183,9 @@ class _LoginPageState extends State<LoginPage> {
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
                               color: Colors.grey[700],
                             ),
                             onPressed: () {
@@ -209,12 +231,19 @@ class _LoginPageState extends State<LoginPage> {
                       TextButton(
                         onPressed: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Funcionalidad de registro no implementada.")),
+                            const SnackBar(
+                              content: Text(
+                                "Funcionalidad de registro no implementada.",
+                              ),
+                            ),
                           );
                         },
                         child: const Text(
                           "¿No tienes cuenta? Regístrate",
-                          style: TextStyle(color: Colors.purple, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: Colors.purple,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),

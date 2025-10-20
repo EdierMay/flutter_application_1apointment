@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'appointment_page.dart'; // para agendar con parámetros
-import 'doctor_agenda_page.dart'; // para ver la agenda del médico
+import 'appointment_page.dart'; // porque navega a agendar
+import 'doctor_agenda_page.dart'; // porque muestra la agenda
 
 class SpecialistDoctorsPage extends StatelessWidget {
   final String especialidad;

@@ -9,7 +9,7 @@ class AboutPage extends StatelessWidget {
       body: const Padding(
         padding: EdgeInsets.all(16),
         child: Text(
-          "DoctorAppointmentApp v1.0\nDesarrollada por [Tu Nombre].\n\nUna aplicación para agendar citas médicas y ofrecer consejos médicos básicos.",
+          "DoctorAppointmentApp v1.0\nDesarrollada por Edier May.\n\nUna aplicación para agendar citas médicas y ofrecer consejos médicos básicos.",
           style: TextStyle(fontSize: 16),
         ),
       ),

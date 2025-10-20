@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+// NO importes specialist_doctors_page.dart ni doctor_agenda_page.dart aquí
 // import 'package:cloud_firestore/cloud_firestore.dart'; // <-- Descomenta si ya usas Firestore
 
 class AppointmentPage extends StatefulWidget {
@@ -109,47 +110,6 @@ class _AppointmentPageState extends State<AppointmentPage> {
       selectedTime!.hour,
       selectedTime!.minute,
     );
-
-    // ✅ Validación de choque de horario (descomenta para activarlo con Firestore)
-    // if (await hasTimeConflict(
-    //   especialidad: widget.especialidad ?? 'general',
-    //   doctorId: widget.doctorId ?? 'sin-id',
-    //   fechaHoraLocal: dateTime,
-    // )) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(content: Text("Este horario ya está ocupado para este médico")),
-    //   );
-    //   return;
-    // }
-
-    // ----- Guarda por doctor (cada médico con su propia agenda) -----
-    // Descomenta cuando tengas cloud_firestore configurado en tu proyecto:
-    /*
-    try {
-      await FirebaseFirestore.instance
-          .collection('especialidades')
-          .doc(widget.especialidad ?? 'general')
-          .collection('doctores')
-          .doc(widget.doctorId ?? 'sin-id')
-          .collection('citas')
-          .add({
-        'pacienteUid': user!.uid,
-        'pacienteEmail': user!.email,
-        'especialidad': widget.especialidad,
-        'doctorId': widget.doctorId,
-        'doctorNombre': widget.doctorNombre,
-        'motivo': motivoController.text.trim(),
-        'fechaHora': dateTime.toUtc(),
-        'creadoEn': FieldValue.serverTimestamp(),
-        'estado': 'pendiente',
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error al guardar: $e")),
-      );
-      return;
-    }
-    */
 
     // DEMO (sin Firestore):
     ScaffoldMessenger.of(context).showSnackBar(
