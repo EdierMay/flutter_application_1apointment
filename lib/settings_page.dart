@@ -27,21 +27,30 @@ class SettingsPage extends StatelessWidget {
           leading: const Icon(Icons.person),
           title: const Text("Perfil"),
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
+            );
           },
         ),
         ListTile(
           leading: const Icon(Icons.lock),
           title: const Text("Privacidad"),
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPage()));
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const PrivacyPage()),
+            );
           },
         ),
         ListTile(
           leading: const Icon(Icons.info),
           title: const Text("Sobre nosotros"),
           onTap: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()));
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AboutPage()),
+            );
           },
         ),
         ListTile(
