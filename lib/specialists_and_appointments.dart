@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// ===============================
-/// =  DATOS DE ESPECIALIDADES    =
-/// ===============================
-/// Centralizamos los datos simulados para que SpecialistDoctorsPage y DoctorAgendaPage
-/// los compartan. Puedes sustituir esto por Firestore cuando quieras.
+/// =====================================
+/// =  DATOS (simulados) DE ESPECIALIDAD =
+/// =====================================
 Map<String, List<Map<String, String>>> kEspecialidadesData = {
   "Cardiología": [
     {
@@ -194,11 +192,11 @@ class SpecialistDoctorsPage extends StatelessWidget {
 }
 
 /// =======================
-/// =  DOCTOR AGENDA PAGE =
+/// =   DOCTOR AGENDA     =
 /// =======================
-/// Ahora permite **cambiar de especialidad** con un Dropdown y muestra
-/// la lista de **médicos por especialidad**. Al elegir un médico, se
-/// actualiza la agenda en vivo y puedes agendar desde aquí.
+/// - Cambiar especialidad y médico.
+/// - Leer citas en vivo.
+/// - Editar / Eliminar (CRUD completo).
 class DoctorAgendaPage extends StatefulWidget {
   final String especialidadInicial;
   final String doctorIdInicial;
@@ -220,6 +218,8 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
   String? _doctorIdSel;
   String? _doctorNombreSel;
 
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
   @override
   void initState() {
     super.initState();
@@ -228,34 +228,58 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
     _doctorNombreSel = widget.doctorNombreInicial;
   }
 
-  // Fallback demo
-  List<DateTime> _demoCitas() {
-    final now = DateTime.now();
-    return [
-      DateTime(now.year, now.month, now.day, 9, 0),
-      DateTime(now.year, now.month, now.day, 10, 30),
-      DateTime(now.year, now.month, now.day + 1, 12, 0),
-    ];
+  // DELETE: elimina en doctor-path y en mirror del usuario
+  Future<void> _deleteAppointment({
+    required String especialidad,
+    required String doctorId,
+    required String appointmentId,
+  }) async {
+    try {
+      final doctorDocRef = _db
+          .collection('especialidades')
+          .doc(especialidad)
+          .collection('doctores')
+          .doc(doctorId)
+          .collection('citas')
+          .doc(appointmentId);
+
+      // Lee para conocer pacienteId y eliminar espejo
+      final snap = await doctorDocRef.get();
+      final data = snap.data() as Map<String, dynamic>?;
+      final pacienteId = data?['pacienteId'] as String?;
+
+      final batch = _db.batch();
+      batch.delete(doctorDocRef);
+
+      if (pacienteId != null && pacienteId.isNotEmpty) {
+        final userRef = _db
+            .collection('users')
+            .doc(pacienteId)
+            .collection('appointments')
+            .doc(appointmentId);
+        batch.delete(userRef);
+      }
+
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error al eliminar cita: $e');
+      rethrow;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final doctors = getDoctorsOf(_especialidadSel);
+
     final citasQuery = (_doctorIdSel == null)
         ? null
-        : FirebaseFirestore.instance
+        : _db
               .collection('especialidades')
               .doc(_especialidadSel)
               .collection('doctores')
               .doc(_doctorIdSel!)
               .collection('citas')
-              .where(
-                'fechaHora',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(
-                  DateTime.now().toUtc(),
-                ),
-              )
-              .orderBy('fechaHora');
+              .orderBy('fechaHora'); // ya filtramos en UI
 
     return Scaffold(
       appBar: AppBar(title: const Text("Agenda"), backgroundColor: Colors.teal),
@@ -274,15 +298,16 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
                     labelText: "Especialidad",
                     border: OutlineInputBorder(),
                   ),
-                  items: kEspecialidadesData.keys.map((esp) {
-                    return DropdownMenuItem(value: esp, child: Text(esp));
-                  }).toList(),
+                  items: kEspecialidadesData.keys
+                      .map(
+                        (esp) => DropdownMenuItem(value: esp, child: Text(esp)),
+                      )
+                      .toList(),
                   onChanged: (value) {
                     if (value == null) return;
                     final nuevosDocs = getDoctorsOf(value);
                     setState(() {
                       _especialidadSel = value;
-                      // Reinicia selección de doctor a primero disponible (si hay)
                       if (nuevosDocs.isNotEmpty) {
                         _doctorIdSel = nuevosDocs.first['id'];
                         _doctorNombreSel = nuevosDocs.first['nombre'];
@@ -298,7 +323,7 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
           ),
           const SizedBox(height: 12),
 
-          // Lista de médicos de la especialidad seleccionada
+          // Médicos de la especialidad seleccionada
           const Text(
             "Médicos por especialidad:",
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -368,7 +393,7 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
                 builder: (context, snap) {
                   if (snap.hasError) {
                     return const Text(
-                      "No se pudieron cargar las citas (mostrando demo).",
+                      "No se pudieron cargar las citas.",
                       style: TextStyle(color: Colors.redAccent),
                     );
                   }
@@ -383,25 +408,15 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
 
                   final docs = snap.data!.docs;
                   if (docs.isEmpty) {
-                    // Fallback demo si no hay citas en Firestore
-                    final demo = _demoCitas();
-                    return Column(
-                      children: demo.map((dt) {
-                        final hora = TimeOfDay(
-                          hour: dt.hour,
-                          minute: dt.minute,
-                        ).format(context);
-                        final fecha = "${dt.day}/${dt.month}/${dt.year}";
-                        return Card(
-                          elevation: 2,
-                          child: ListTile(
-                            leading: const Icon(Icons.event_available),
-                            title: Text("$fecha • $hora"),
-                            subtitle: Text(_doctorNombreSel ?? 'Médico'),
-                            trailing: const Icon(Icons.chevron_right),
-                          ),
-                        );
-                      }).toList(),
+                    return Card(
+                      elevation: 1,
+                      child: ListTile(
+                        leading: const Icon(Icons.hourglass_empty),
+                        title: const Text("Sin citas"),
+                        subtitle: Text(
+                          "No hay citas para ${_doctorNombreSel ?? 'este médico'}.",
+                        ),
+                      ),
                     );
                   }
 
@@ -419,13 +434,167 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
                       final paciente =
                           (data['pacienteEmail'] as String?) ?? 'Paciente';
 
-                      return Card(
-                        elevation: 2,
-                        child: ListTile(
-                          leading: const Icon(Icons.event_available),
-                          title: Text("$fecha • $hora"),
-                          subtitle: Text(paciente),
-                          trailing: const Icon(Icons.chevron_right),
+                      return Dismissible(
+                        key: ValueKey(d.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          color: Colors.redAccent,
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (_) async {
+                          final ok =
+                              await showDialog<bool>(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: const Text("Cancelar cita"),
+                                  content: const Text(
+                                    "¿Seguro que deseas eliminar esta cita? Esta acción no se puede deshacer.",
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text("No"),
+                                    ),
+                                    FilledButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text("Sí, eliminar"),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                          if (ok) {
+                            try {
+                              await _deleteAppointment(
+                                especialidad: _especialidadSel,
+                                doctorId: _doctorIdSel!,
+                                appointmentId: d.id,
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Cita eliminada"),
+                                  ),
+                                );
+                              }
+                              return true;
+                            } catch (_) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "No se pudo eliminar. Intenta de nuevo.",
+                                    ),
+                                  ),
+                                );
+                              }
+                              return false;
+                            }
+                          }
+                          return false;
+                        },
+                        child: Card(
+                          elevation: 2,
+                          child: ListTile(
+                            leading: const Icon(Icons.event_available),
+                            title: Text("$fecha • $hora"),
+                            subtitle: Text(paciente),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Editar cita',
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => AppointmentPage(
+                                          especialidad: _especialidadSel,
+                                          doctorNombre: _doctorNombreSel,
+                                          doctorId: _doctorIdSel,
+                                          appointmentId: d.id, // <- EDIT
+                                          initialData:
+                                              data, // <- para precargar
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                IconButton(
+                                  tooltip: 'Eliminar cita',
+                                  icon: const Icon(
+                                    Icons.delete,
+                                    color: Colors.redAccent,
+                                  ),
+                                  onPressed: () async {
+                                    final ok =
+                                        await showDialog<bool>(
+                                          context: context,
+                                          builder: (_) => AlertDialog(
+                                            title: const Text("Cancelar cita"),
+                                            content: const Text(
+                                              "¿Seguro que deseas eliminar esta cita?",
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(
+                                                  context,
+                                                  false,
+                                                ),
+                                                child: const Text("No"),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () => Navigator.pop(
+                                                  context,
+                                                  true,
+                                                ),
+                                                child: const Text(
+                                                  "Sí, eliminar",
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ) ??
+                                        false;
+                                    if (!ok) return;
+                                    try {
+                                      await _deleteAppointment(
+                                        especialidad: _especialidadSel,
+                                        doctorId: _doctorIdSel!,
+                                        appointmentId: d.id,
+                                      );
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text("Cita eliminada"),
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              "No se pudo eliminar. Intenta de nuevo.",
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     }).toList(),
@@ -468,16 +637,23 @@ class _DoctorAgendaPageState extends State<DoctorAgendaPage> {
 /// =====================
 /// =  APPOINTMENT PAGE =
 /// =====================
+/// CREATE + UPDATE: si viene appointmentId, se edita; si no, se crea.
 class AppointmentPage extends StatefulWidget {
   final String? especialidad;
   final String? doctorNombre;
-  final String? doctorId; // clave estable por médico
+  final String? doctorId;
+
+  // NUEVO: edición
+  final String? appointmentId; // null = crear, no null = editar
+  final Map<String, dynamic>? initialData; // para precargar campos
 
   const AppointmentPage({
     super.key,
     this.especialidad,
     this.doctorNombre,
     this.doctorId,
+    this.appointmentId,
+    this.initialData,
   });
 
   @override
@@ -492,6 +668,24 @@ class _AppointmentPageState extends State<AppointmentPage> {
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  bool get isEditing => widget.appointmentId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    // Precargar datos si estamos editando
+    final data = widget.initialData;
+    if (data != null) {
+      motivoController.text = (data['motivo'] as String?) ?? '';
+      final ts = data['fechaHora'] as Timestamp?;
+      final dt = ts?.toDate().toLocal();
+      if (dt != null) {
+        selectedDate = DateTime(dt.year, dt.month, dt.day);
+        selectedTime = TimeOfDay(hour: dt.hour, minute: dt.minute);
+      }
+    }
+  }
+
   @override
   void dispose() {
     motivoController.dispose();
@@ -502,7 +696,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
-      initialDate: now,
+      initialDate: selectedDate ?? now,
       firstDate: now,
       lastDate: DateTime(now.year + 1),
     );
@@ -512,7 +706,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
   Future<void> _pickTime() async {
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.now(),
+      initialTime: selectedTime ?? TimeOfDay.now(),
     );
     if (time != null) setState(() => selectedTime = time);
   }
@@ -530,7 +724,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
     final finUtc = fechaUtc.add(ventana);
 
     try {
-      final snap = await _db
+      Query q = _db
           .collection('especialidades')
           .doc(especialidad)
           .collection('doctores')
@@ -540,14 +734,18 @@ class _AppointmentPageState extends State<AppointmentPage> {
             'fechaHora',
             isGreaterThanOrEqualTo: Timestamp.fromDate(inicioUtc),
           )
-          .where('fechaHora', isLessThanOrEqualTo: Timestamp.fromDate(finUtc))
-          .limit(1)
-          .get();
+          .where('fechaHora', isLessThanOrEqualTo: Timestamp.fromDate(finUtc));
 
+      // Al editar, ignora la misma cita
+      if (isEditing) {
+        q = q.where(FieldPath.documentId, isNotEqualTo: widget.appointmentId);
+      }
+
+      final snap = await q.limit(1).get();
       return snap.docs.isNotEmpty;
     } catch (e) {
       debugPrint('hasTimeConflict error: $e');
-      return false; // ante error, no bloquear
+      return false;
     }
   }
 
@@ -561,7 +759,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
 
     if (selectedDate == null ||
         selectedTime == null ||
-        motivoController.text.isEmpty) {
+        motivoController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Completa todos los campos")),
       );
@@ -603,7 +801,8 @@ class _AppointmentPageState extends State<AppointmentPage> {
     }
 
     final fechaUtc = localDateTime.toUtc();
-    final citaData = {
+
+    final baseData = {
       'pacienteId': user!.uid,
       'pacienteEmail': user!.email,
       'especialidad': widget.especialidad,
@@ -613,29 +812,59 @@ class _AppointmentPageState extends State<AppointmentPage> {
       'fechaHora': Timestamp.fromDate(fechaUtc),
       'timezoneClient': DateTime.now().timeZoneName,
       'estado': 'pendiente',
-      'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
     try {
       final batch = _db.batch();
 
-      final doctorCitaRef = _db
-          .collection('especialidades')
-          .doc(widget.especialidad!)
-          .collection('doctores')
-          .doc(widget.doctorId!)
-          .collection('citas')
-          .doc();
+      DocumentReference<Map<String, dynamic>> doctorCitaRef;
+      DocumentReference<Map<String, dynamic>> userCitaRef;
 
-      final userCitaRef = _db
-          .collection('users')
-          .doc(user!.uid)
-          .collection('appointments')
-          .doc(doctorCitaRef.id);
+      if (isEditing) {
+        // UPDATE (mantiene el mismo ID en ambos lados)
+        doctorCitaRef = _db
+            .collection('especialidades')
+            .doc(widget.especialidad!)
+            .collection('doctores')
+            .doc(widget.doctorId!)
+            .collection('citas')
+            .doc(widget.appointmentId!);
 
-      batch.set(doctorCitaRef, citaData);
-      batch.set(userCitaRef, {...citaData, 'pathDoctor': doctorCitaRef.path});
+        userCitaRef = _db
+            .collection('users')
+            .doc(user!.uid)
+            .collection('appointments')
+            .doc(widget.appointmentId!);
+
+        batch.update(doctorCitaRef, baseData);
+        batch.update(userCitaRef, baseData);
+      } else {
+        // CREATE
+        doctorCitaRef = _db
+            .collection('especialidades')
+            .doc(widget.especialidad!)
+            .collection('doctores')
+            .doc(widget.doctorId!)
+            .collection('citas')
+            .doc();
+
+        userCitaRef = _db
+            .collection('users')
+            .doc(user!.uid)
+            .collection('appointments')
+            .doc(doctorCitaRef.id);
+
+        batch.set(doctorCitaRef, {
+          ...baseData,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        batch.set(userCitaRef, {
+          ...baseData,
+          'createdAt': FieldValue.serverTimestamp(),
+          'pathDoctor': doctorCitaRef.path,
+        });
+      }
 
       await batch.commit();
 
@@ -644,7 +873,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
         SnackBar(
           backgroundColor: Colors.teal,
           content: Text(
-            "Cita agendada con ${widget.doctorNombre} el "
+            "${isEditing ? 'Cita actualizada' : 'Cita agendada'} con ${widget.doctorNombre} el "
             "${localDateTime.day}/${localDateTime.month}/${localDateTime.year} "
             "${selectedTime!.format(context)}",
           ),
@@ -669,7 +898,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Agendar Cita"),
+        title: Text(isEditing ? "Editar Cita" : "Agendar Cita"),
         backgroundColor: Colors.teal,
       ),
       body: Padding(
@@ -721,8 +950,8 @@ class _AppointmentPageState extends State<AppointmentPage> {
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _saveAppointment,
-              icon: const Icon(Icons.save),
-              label: const Text("Guardar cita"),
+              icon: Icon(isEditing ? Icons.check : Icons.save),
+              label: Text(isEditing ? "Guardar cambios" : "Guardar cita"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.teal,
                 foregroundColor: Colors.white,
