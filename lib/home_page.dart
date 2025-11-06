@@ -107,149 +107,156 @@ class _HomePageState extends State<HomePage>
   Widget _buildHomeContent() {
     final String nombreUsuario = user?.email?.split('@').first ?? "Paciente";
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header tipo "Hero" con gradiente
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [_brand, _brandDark],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(28),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _brand.withOpacity(0.25),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
+    return RefreshIndicator(
+      onRefresh: _reloadHome,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header tipo "Hero" con gradiente
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_brand, _brandDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Saludo + avatar
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FadeTransition(
-                          opacity: _fadeIn,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              // El texto del saludo lo rellenamos abajo
-                            ],
-                          ),
-                        ),
-                      ),
-                      const CircleAvatar(
-                        radius: 26,
-                        backgroundColor: Colors.white24,
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Saludo (separado para poder insertar la variable)
-                  FadeTransition(
-                    opacity: _fadeIn,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Hola, $nombreUsuario",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          "Cuida tu salud con citas rápidas y seguras",
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // CTA’s rápidos
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _ctaCard(
-                          icon: Icons.calendar_month_rounded,
-                          label: "Agendar cita",
-                          onTap: _openAgendarDesdeEspecialidad,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _ctaCard(
-                          icon: Icons.tips_and_updates_rounded,
-                          label: "Consejos",
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const TipsPage(),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: _brand.withOpacity(0.25),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-            ),
-          ),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Saludo + avatar
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FadeTransition(
+                            opacity: _fadeIn,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                // El texto del saludo lo rellenamos abajo
+                              ],
+                            ),
+                          ),
+                        ),
+                        const CircleAvatar(
+                          radius: 26,
+                          backgroundColor: Colors.white24,
+                          child: Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Saludo (separado para poder insertar la variable)
+                    FadeTransition(
+                      opacity: _fadeIn,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Hola, $nombreUsuario",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            "Cuida tu salud con citas rápidas y seguras",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
 
-          const SizedBox(height: 20),
-
-          // ---------- Especialidades (tarjetas expandibles) ----------
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              "Especialidades",
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade900,
+                    // CTA’s rápidos
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ctaCard(
+                            icon: Icons.calendar_month_rounded,
+                            label: "Agendar cita",
+                            onTap: _openAgendarDesdeEspecialidad,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _ctaCard(
+                            icon: Icons.tips_and_updates_rounded,
+                            label: "Consejos",
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const TipsPage(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              children: especialistas.map((esp) {
-                final data = _especialidadInfo[esp]!;
-                return _specialtyExpandableCard(
-                  title: esp,
-                  tagline: data["tagline"] as String,
-                  desc: data["desc"] as String,
-                  focus: (data["focus"] as List<String>),
-                  icon: (data["icon"] as IconData),
-                );
-              }).toList(),
+            const SizedBox(height: 20),
+
+            // ---------- Especialidades (tarjetas expandibles) ----------
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                "Especialidades",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey.shade900,
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                children: especialistas.map((esp) {
+                  final data = _especialidadInfo[esp]!;
+                  return _specialtyExpandableCard(
+                    title: esp,
+                    tagline: data["tagline"] as String,
+                    desc: data["desc"] as String,
+                    focus: (data["focus"] as List<String>),
+                    icon: (data["icon"] as IconData),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -584,6 +591,14 @@ class _HomePageState extends State<HomePage>
         label: const Text("Agendar"),
       ),
     );
+  }
+
+  /// ---------- Pull-to-refresh ----------
+  Future<void> _reloadHome() async {
+    // Aquí podrías reconsultar backend/Firebase; por ahora solo refresca la UI.
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+    setState(() {});
   }
 }
 
