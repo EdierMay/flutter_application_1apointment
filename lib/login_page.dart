@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,12 +15,17 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  // Rol Paciente / Médico
+  String _selectedRole = 'Paciente';
+  final List<String> _roles = const ['Paciente', 'Médico'];
+
   Future<void> _recargarFormulario() async {
     await Future.delayed(const Duration(seconds: 1)); // simula recarga
     setState(() {
       emailController.clear();
       passwordController.clear();
       _obscurePassword = true;
+      _selectedRole = 'Paciente';
     });
     ScaffoldMessenger.of(
       context,
@@ -40,6 +46,14 @@ class _LoginPageState extends State<LoginPage> {
           email: emailController.text.trim(),
           password: passwordController.text.trim(),
         );
+        final user = cred.user!;
+
+        // Guardar / actualizar rol en Firestore
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'email': user.email,
+          'rol': _selectedRole, // Paciente o Médico
+        }, SetOptions(merge: true));
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -47,7 +61,6 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: Colors.teal,
           ),
         );
-        // Usa ruta nombrada para no depender de home_page.dart
         Navigator.pushReplacementNamed(context, '/home');
       } on FirebaseAuthException catch (e) {
         String msg = "Error: ${e.message}";
@@ -151,9 +164,7 @@ class _LoginPageState extends State<LoginPage> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(
-                    24,
-                  ), // ← AQUÍ estaba el error: faltaba 'padding:'
+                  padding: const EdgeInsets.all(24),
                   child: Form(
                     key: _formKey,
                     child: Column(
@@ -222,6 +233,31 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                         ),
+                        const SizedBox(height: 16),
+
+                        // Dropdown de Rol
+                        DropdownButtonFormField<String>(
+                          value: _selectedRole,
+                          decoration: const InputDecoration(
+                            labelText: "Rol",
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                          items: _roles
+                              .map(
+                                (rol) => DropdownMenuItem<String>(
+                                  value: rol,
+                                  child: Text(rol),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _selectedRole = value;
+                            });
+                          },
+                        ),
+
                         const SizedBox(height: 8),
                         Align(
                           alignment: Alignment.centerRight,

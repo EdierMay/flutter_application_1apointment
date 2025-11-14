@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'profile_page.dart';
 import 'messages_page.dart';
 import 'settings_page.dart';
 import 'tips_page.dart';
-
-// 👇 Usar SOLO el archivo unificado
 import 'specialists_and_appointments.dart';
+import 'dashboard_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,6 +21,15 @@ class _HomePageState extends State<HomePage>
   int _currentIndex = 0;
   final User? user = FirebaseAuth.instance.currentUser;
 
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  String _userRole = 'Paciente'; // 'Paciente' o 'Médico'
+  bool _loadingRole = true;
+
+  // Selección del médico (para Dashboard y Mensajes del médico)
+  String? _medEspecialidad;
+  String? _medDoctorId;
+  String? _medDoctorNombre;
+
   final List<String> especialistas = const [
     "Cardiología",
     "Pediatría",
@@ -30,7 +39,7 @@ class _HomePageState extends State<HomePage>
     "Ortopedía",
   ];
 
-  // Info para cada especialidad (se muestra dentro de la tarjeta expandible)
+  // Info para cada especialidad (tarjetas expandibles)
   final Map<String, Map<String, dynamic>> _especialidadInfo = {
     "Cardiología": {
       "tagline": "Salud del corazón y vasos sanguíneos",
@@ -92,6 +101,73 @@ class _HomePageState extends State<HomePage>
       duration: const Duration(milliseconds: 600),
     )..forward();
     _fadeIn = CurvedAnimation(parent: _anim, curve: Curves.easeOut);
+
+    _loadUserRole();
+  }
+
+  Future<void> _loadUserRole() async {
+    if (user == null) {
+      setState(() => _loadingRole = false);
+      return;
+    }
+    try {
+      final doc = await _db.collection('users').doc(user!.uid).get();
+      final data = doc.data();
+      final role = (data?['rol'] as String?) ?? 'Paciente';
+
+      setState(() {
+        _userRole = role;
+        _loadingRole = false;
+      });
+
+      if (role == 'Médico') {
+        _initMedicoDefaults();
+      }
+    } catch (e) {
+      setState(() => _loadingRole = false);
+    }
+  }
+
+  void _initMedicoDefaults() {
+    if (especialistas.isEmpty) return;
+    final esp = especialistas.first;
+    final docs = getDoctorsOf(esp);
+
+    setState(() {
+      _medEspecialidad = esp;
+      if (docs.isNotEmpty) {
+        _medDoctorId = docs.first['id'];
+        _medDoctorNombre = docs.first['nombre'];
+      } else {
+        _medDoctorId = null;
+        _medDoctorNombre = null;
+      }
+    });
+  }
+
+  // Ir al dashboard DEL médico seleccionado
+  void _goToDashboardForMedico() {
+    if (_medEspecialidad == null ||
+        _medDoctorId == null ||
+        _medDoctorNombre == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selecciona la especialidad y el médico primero.'),
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DashboardPage(
+          especialidad: _medEspecialidad!,
+          doctorId: _medDoctorId!,
+          doctorNombre: _medDoctorNombre!,
+        ),
+      ),
+    );
   }
 
   @override
@@ -106,16 +182,20 @@ class _HomePageState extends State<HomePage>
   /// ---------- UI HOME ----------
   Widget _buildHomeContent() {
     final String nombreUsuario = user?.email?.split('@').first ?? "Paciente";
+    final bool esMedico = _userRole == 'Médico';
 
     return RefreshIndicator(
-      onRefresh: _reloadHome,
+      onRefresh: () async {
+        await _reloadHome();
+        await _loadUserRole();
+      },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header tipo "Hero" con gradiente
+            // Header tipo Hero
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -140,7 +220,6 @@ class _HomePageState extends State<HomePage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Saludo + avatar
                     Row(
                       children: [
                         Expanded(
@@ -148,31 +227,38 @@ class _HomePageState extends State<HomePage>
                             opacity: _fadeIn,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                // El texto del saludo lo rellenamos abajo
-                              ],
+                              children: const [],
                             ),
                           ),
                         ),
-                        const CircleAvatar(
-                          radius: 26,
-                          backgroundColor: Colors.white24,
+                        CircleAvatar(
+                          radius: 28,
+                          backgroundColor: Colors.white,
                           child: Icon(
-                            Icons.person,
-                            color: Colors.white,
+                            esMedico
+                                ? Icons.medical_information_rounded
+                                : Icons.person,
+                            color: _brandDark,
                             size: 28,
                           ),
                         ),
                       ],
                     ),
-                    // Saludo (separado para poder insertar la variable)
+                    const SizedBox(height: 10),
                     FadeTransition(
                       opacity: _fadeIn,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            "Hola, $nombreUsuario",
+                            esMedico ? "Bienvenido doctor(a)" : "Hola",
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            nombreUsuario,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
@@ -180,9 +266,11 @@ class _HomePageState extends State<HomePage>
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
-                            "Cuida tu salud con citas rápidas y seguras",
-                            style: TextStyle(
+                          Text(
+                            esMedico
+                                ? "Administra tus pacientes, citas y mensajes desde un solo lugar."
+                                : "Cuida tu salud con citas rápidas y seguras.",
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
                             ),
@@ -192,14 +280,18 @@ class _HomePageState extends State<HomePage>
                     ),
                     const SizedBox(height: 18),
 
-                    // CTA’s rápidos
+                    // CTA rápidos
                     Row(
                       children: [
                         Expanded(
                           child: _ctaCard(
-                            icon: Icons.calendar_month_rounded,
-                            label: "Agendar cita",
-                            onTap: _openAgendarDesdeEspecialidad,
+                            icon: esMedico
+                                ? Icons.bar_chart_rounded
+                                : Icons.calendar_month_rounded,
+                            label: esMedico ? "Ver dashboard" : "Agendar cita",
+                            onTap: esMedico
+                                ? _goToDashboardForMedico
+                                : _openAgendarDesdeEspecialidad,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -226,42 +318,263 @@ class _HomePageState extends State<HomePage>
 
             const SizedBox(height: 20),
 
-            // ---------- Especialidades (tarjetas expandibles) ----------
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                "Especialidades",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.grey.shade900,
+            // 🔹 SOLO MÉDICOS: configuración rápida + mini panel
+            if (esMedico) ...[
+              _buildMedicoSelectorCard(),
+              const SizedBox(height: 12),
+              _buildMedicoMiniPanel(),
+            ],
+
+            // 🔹 SOLO PACIENTES: sección de especialidades
+            if (!esMedico) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  "Especialidades",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade900,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Column(
-                children: especialistas.map((esp) {
-                  final data = _especialidadInfo[esp]!;
-                  return _specialtyExpandableCard(
-                    title: esp,
-                    tagline: data["tagline"] as String,
-                    desc: data["desc"] as String,
-                    focus: (data["focus"] as List<String>),
-                    icon: (data["icon"] as IconData),
-                  );
-                }).toList(),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Column(
+                  children: especialistas.map((esp) {
+                    final data = _especialidadInfo[esp]!;
+                    return _specialtyExpandableCard(
+                      title: esp,
+                      tagline: data["tagline"] as String,
+                      desc: data["desc"] as String,
+                      focus: (data["focus"] as List<String>),
+                      icon: (data["icon"] as IconData),
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  /// ---------- Flujo: agendar desde especialidad ----------
+  /// ---------- Card de selección para médicos ----------
+  Widget _buildMedicoSelectorCard() {
+    final docs = _medEspecialidad != null
+        ? getDoctorsOf(_medEspecialidad!)
+        : <Map<String, String>>[];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        color: const Color(0xFFF7F9FC),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.medical_services_rounded, color: Colors.teal),
+                  SizedBox(width: 8),
+                  Text(
+                    "Configuración rápida del médico",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                "Selecciona tu especialidad y tu nombre para filtrar el Dashboard y los mensajes.",
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _medEspecialidad,
+                decoration: const InputDecoration(
+                  labelText: "Especialidad",
+                  border: OutlineInputBorder(),
+                ),
+                items: especialistas
+                    .map(
+                      (esp) => DropdownMenuItem(value: esp, child: Text(esp)),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  final nuevosDocs = getDoctorsOf(value);
+                  setState(() {
+                    _medEspecialidad = value;
+                    if (nuevosDocs.isNotEmpty) {
+                      _medDoctorId = nuevosDocs.first['id'];
+                      _medDoctorNombre = nuevosDocs.first['nombre'];
+                    } else {
+                      _medDoctorId = null;
+                      _medDoctorNombre = null;
+                    }
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _medDoctorId,
+                decoration: const InputDecoration(
+                  labelText: "Médico",
+                  border: OutlineInputBorder(),
+                ),
+                items: docs
+                    .map(
+                      (d) => DropdownMenuItem(
+                        value: d['id'],
+                        child: Text(d['nombre'] ?? ''),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  final docSel = docs.firstWhere(
+                    (d) => d['id'] == value,
+                    orElse: () => {},
+                  );
+                  setState(() {
+                    _medDoctorId = value;
+                    _medDoctorNombre = docSel['nombre'];
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _goToDashboardForMedico,
+                      icon: const Icon(Icons.bar_chart_rounded),
+                      label: const Text("Ir al Dashboard"),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _currentIndex = 1; // pestaña Mensajes
+                        });
+                      },
+                      icon: const Icon(Icons.message_rounded),
+                      label: const Text("Ver mensajes"),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// ---------- Mini panel bonito para el médico ----------
+  Widget _buildMedicoMiniPanel() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 4),
+          const Text(
+            "Panel rápido del médico",
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            "Accesos directos a lo que más usas en la consulta.",
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _statCard(
+                  icon: Icons.event_available_rounded,
+                  title: "Citas",
+                  subtitle: "Revisa tu agenda\npor especialidad.",
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.groups_rounded,
+                  title: "Pacientes",
+                  subtitle: "Visualiza a los\npacientes atendidos.",
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _statCard(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  title: "Mensajes",
+                  subtitle: "Responde dudas\nde tus pacientes.",
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+        border: Border.all(color: _brand.withOpacity(0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: _brand.withOpacity(0.1),
+            child: Icon(icon, color: _brandDark, size: 20),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.black54,
+              height: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ---------- Flujo: agendar desde especialidad (PACIENTE) ----------
   Future<void> _openAgendarDesdeEspecialidad() async {
     final esp = await showModalBottomSheet<String>(
       context: context,
@@ -286,7 +599,6 @@ class _HomePageState extends State<HomePage>
 
     if (esp == null) return;
 
-    // Toma el primer doctor de esa especialidad (del archivo unificado)
     final docs = getDoctorsOf(esp);
     if (docs.isEmpty) {
       if (!mounted) return;
@@ -302,7 +614,7 @@ class _HomePageState extends State<HomePage>
       return;
     }
 
-    final first = docs.first; // { id, nombre, ... }
+    final first = docs.first;
 
     if (!mounted) return;
     Navigator.push(
@@ -367,7 +679,7 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  /// ---------- Tarjeta de especialidad expandible ----------
+  /// ---------- Tarjeta de especialidad expandible (PACIENTE) ----------
   Widget _specialtyExpandableCard({
     required String title,
     required String tagline,
@@ -418,14 +730,11 @@ class _HomePageState extends State<HomePage>
             ),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             children: [
-              // Descripción
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(desc, style: const TextStyle(height: 1.35)),
               ),
               const SizedBox(height: 10),
-
-              // Enfoques (chips)
               Align(
                 alignment: Alignment.centerLeft,
                 child: Wrap(
@@ -442,8 +751,6 @@ class _HomePageState extends State<HomePage>
                 ),
               ),
               const SizedBox(height: 12),
-
-              // CTAs
               Row(
                 children: [
                   Expanded(
@@ -482,7 +789,7 @@ class _HomePageState extends State<HomePage>
                           );
                           return;
                         }
-                        final first = docs.first; // { id, nombre, ... }
+                        final first = docs.first;
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -530,14 +837,32 @@ class _HomePageState extends State<HomePage>
 
   /// ---------- Body según tab ----------
   Widget _buildBody() {
+    if (_loadingRole) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     switch (_currentIndex) {
       case 1:
         if (user == null) {
           return const Center(child: Text('Inicia sesión para ver mensajes'));
         }
-        const doctorId = 'doctor123'; // cambia por tu doctorId real
+
+        // Si es médico, usa su doctorId configurado
+        if (_userRole == 'Médico') {
+          if (_medDoctorId == null) {
+            return const Center(
+              child: Text(
+                'Configura tu especialidad y médico en la pantalla de Inicio.',
+              ),
+            );
+          }
+          final chatId = _chatIdFor(user!.uid, _medDoctorId!);
+          return MessagesPage(chatId: chatId, otherUserId: _medDoctorId);
+        }
+
+        // Si es paciente, por ahora un chat fijo con doctor123 (ejemplo)
+        const doctorId = 'doctor123';
         final chatId = _chatIdFor(user!.uid, doctorId);
-        // Si tu MessagesPage no admite otherUserId, quita el argumento.
         return MessagesPage(chatId: chatId, otherUserId: doctorId);
 
       case 2:
@@ -552,6 +877,8 @@ class _HomePageState extends State<HomePage>
 
   @override
   Widget build(BuildContext context) {
+    final bool esMedico = _userRole == 'Médico';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FA),
       appBar: AppBar(
@@ -583,19 +910,22 @@ class _HomePageState extends State<HomePage>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: _brand,
-        foregroundColor: Colors.white,
-        onPressed: _openAgendarDesdeEspecialidad,
-        icon: const Icon(Icons.add),
-        label: const Text("Agendar"),
-      ),
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton.extended(
+              backgroundColor: _brand,
+              foregroundColor: Colors.white,
+              onPressed: esMedico
+                  ? _goToDashboardForMedico
+                  : _openAgendarDesdeEspecialidad,
+              icon: Icon(esMedico ? Icons.bar_chart_rounded : Icons.add),
+              label: Text(esMedico ? "Dashboard" : "Agendar"),
+            )
+          : null,
     );
   }
 
   /// ---------- Pull-to-refresh ----------
   Future<void> _reloadHome() async {
-    // Aquí podrías reconsultar backend/Firebase; por ahora solo refresca la UI.
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
     setState(() {});

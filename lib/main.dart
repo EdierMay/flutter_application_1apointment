@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import 'firebase_options.dart';
-import 'home_page.dart'; // Importa HomePage
 import 'login_page.dart';
+import 'home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,10 +13,13 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     final ThemeData base = ThemeData.light();
+
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'DoctorAppointmentApp',
       theme: base.copyWith(
         colorScheme: base.colorScheme.copyWith(
@@ -25,10 +29,10 @@ class MyApp extends StatelessWidget {
         primaryColor: Colors.teal,
         scaffoldBackgroundColor: Colors.blue.shade50,
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF00796B), // verde oscuro
+          backgroundColor: Color(0xFF00796B),
           foregroundColor: Colors.white,
         ),
-        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
           selectedItemColor: Colors.teal,
           unselectedItemColor: Colors.grey,
         ),
@@ -47,7 +51,6 @@ class MyApp extends StatelessWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
-      debugShowCheckedModeBanner: false,
       home: const LoginPage(),
       routes: {
         '/home': (context) => const HomePage(),

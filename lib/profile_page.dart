@@ -24,6 +24,10 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _saving = false;
   DateTime? _updatedAt;
 
+  // Rol
+  String _selectedRole = 'Paciente';
+  final List<String> _roles = const ['Paciente', 'Médico'];
+
   @override
   void initState() {
     super.initState();
@@ -44,14 +48,15 @@ class _ProfilePageState extends State<ProfilePage> {
         edadController.text = (data['edad']?.toString()) ?? '';
         lugarController.text = (data['lugarNacimiento'] as String?) ?? '';
         padecimientosController.text = (data['padecimientos'] as String?) ?? '';
+        _selectedRole = (data['rol'] as String?) ?? 'Paciente';
         final ts = data['updatedAt'];
         if (ts is Timestamp) _updatedAt = ts.toDate();
       } else {
-        // Si no hay doc, puedes inicializar algo por defecto
         nombreController.text = '';
         edadController.text = '';
         lugarController.text = '';
         padecimientosController.text = '';
+        _selectedRole = 'Paciente';
       }
     } catch (e) {
       if (mounted) {
@@ -76,7 +81,6 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _saving = true);
 
     try {
-      // Normaliza edad a entero si es posible
       int? edadInt;
       if (edadController.text.trim().isNotEmpty) {
         edadInt = int.tryParse(edadController.text.trim());
@@ -86,9 +90,10 @@ class _ProfilePageState extends State<ProfilePage> {
         'uid': user!.uid,
         'email': user!.email,
         'nombre': nombreController.text.trim(),
-        'edad': edadInt, // guarda como número si es válido, o null
+        'edad': edadInt,
         'lugarNacimiento': lugarController.text.trim(),
         'padecimientos': padecimientosController.text.trim(),
+        'rol': _selectedRole, // guardamos rol
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -106,7 +111,6 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
 
-      // Refresca fecha de actualización
       final fresh = await _db.collection('users').doc(user!.uid).get();
       final ts = fresh.data()?['updatedAt'];
       if (ts is Timestamp) {
@@ -193,6 +197,31 @@ class _ProfilePageState extends State<ProfilePage> {
                       ],
                       const SizedBox(height: 20),
 
+                      // Dropdown de Rol
+                      DropdownButtonFormField<String>(
+                        value: _selectedRole,
+                        decoration: _inputDecoration(
+                          "Rol en la app",
+                          Icons.badge_outlined,
+                        ),
+                        items: _roles
+                            .map(
+                              (rol) => DropdownMenuItem<String>(
+                                value: rol,
+                                child: Text(rol),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() {
+                            _selectedRole = value;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
                       TextFormField(
                         controller: nombreController,
                         decoration: _inputDecoration(
@@ -217,8 +246,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           final v = value?.trim() ?? '';
                           if (v.isEmpty) return "Campo requerido";
                           final n = int.tryParse(v);
-                          if (n == null || n <= 0 || n > 120)
+                          if (n == null || n <= 0 || n > 120) {
                             return "Edad no válida";
+                          }
                           return null;
                         },
                       ),
